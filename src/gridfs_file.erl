@@ -13,7 +13,7 @@
 %%% @author CA Meijer
 %%% @copyright 2012 CA Meijer
 %%% @doc MongoDB GridFS File API. This module provides functions for reading from
-%%%      a GridFS file and getting file information about a file. 
+%%%      a GridFS file and getting file information about a file.
 %%% @end
 
 -module(gridfs_file).
@@ -25,186 +25,185 @@
 
 %% API
 -export([close/1,
-		 file_name/1,
-		 file_size/1,
-		 new/4,
-		 md5/1,
-		 pread/3,
-		 read_file/1,
-		 set_timeout/2]).
+  file_name/1,
+  file_size/1,
+  new/4,
+  md5/1,
+  pread/3,
+  read_file/1,
+  set_timeout/2]).
 
 %% gen_server callbacks
--export([init/1, 
-		 handle_call/3, 
-		 handle_cast/2, 
-		 handle_info/2, 
-		 terminate/2, 
-		 code_change/3]).
+-export([init/1,
+  handle_call/3,
+  handle_cast/2,
+  handle_info/2,
+  terminate/2,
+  code_change/3]).
 
--record(state, {connection_parameters, bucket, id, parent_process, die_with_parent=true, timeout=infinity}).
+-record(state, {connection_parameters, bucket, id, parent_process, die_with_parent = true, timeout = infinity}).
 
 %% External functions
 %% @doc Closes a file.
 -spec(close(file()) -> ok).
 close(Pid) ->
-	gen_server:call(Pid, close, infinity).
+  gen_server:call(Pid, close, infinity).
 
 %% @doc Returns the name of the file; i.e. the value of the file_name attribute.
 -spec(file_name(file()) -> binary()).
 file_name(Pid) ->
-	gen_server:call(Pid, file_name, infinity).
-	
+  gen_server:call(Pid, file_name, infinity).
+
 %% @doc Returns the size of the file in bytes.
 -spec(file_size(file()) -> integer()).
 file_size(Pid) ->
-	gen_server:call(Pid, file_size, infinity).
-	
+  gen_server:call(Pid, file_size, infinity).
+
 %% @doc Returns the MD5 checksum of the file.
 -spec(md5(file()) -> binary()).
 md5(Pid) ->
-	gen_server:call(Pid, md5, infinity).
-	
+  gen_server:call(Pid, md5, infinity).
+
 %% @doc Opens a file using a specified connection to a database. The file is identified by
 %%      its ID.
 -spec(new(#gridfs_connection{}, bucket(), bson:value(), pid()) -> file()).
 new(ConnectionParameters, Bucket, Id, ParentProcess) ->
-	{ok, Pid} = gen_server:start_link(?MODULE, [ConnectionParameters, Bucket, Id, ParentProcess], []),
-	Pid.
+  {ok, Pid} = gen_server:start_link(?MODULE, [ConnectionParameters, Bucket, Id, ParentProcess], []),
+  Pid.
 
 %% @doc Reads bytes from an offset up to a maximum length.
 -spec(pread(file(), integer(), integer()) -> binary()).
 pread(Pid, Offset, Length) ->
-	gen_server:call(Pid, {pread, Offset, Length}, infinity).
+  gen_server:call(Pid, {pread, Offset, Length}, infinity).
 
 %% @doc Reads the whole contents of a file.
 -spec(read_file(file()) -> binary()).
 read_file(Pid) ->
-	Data = gen_server:call(Pid, read_file, infinity),
-	Data.
-	
+  Data = gen_server:call(Pid, read_file, infinity),
+  Data.
+
 %% @doc Sets the timeout for a file. If the file isn't accessed within the specified time,
 %%      the file is closed.
 -spec(set_timeout(file(), integer()) -> ok).
 set_timeout(Pid, Timeout) ->
-	gen_server:call(Pid, {set_timeout, Timeout}, infinity).
-	
+  gen_server:call(Pid, {set_timeout, Timeout}, infinity).
+
 
 %% Server functions
 
 %% @doc Initializes the server with connection parameters, a bucket and an ID.
 init([ConnectionParameters, Bucket, Id, ParentProcess]) ->
-	monitor(process, ParentProcess),
-	State = #state{connection_parameters=ConnectionParameters, bucket=Bucket, id=Id, parent_process=ParentProcess},
-    {ok, State, infinity}.
+  monitor(process, ParentProcess),
+  State = #state{connection_parameters = ConnectionParameters, bucket = Bucket, id = Id, parent_process = ParentProcess},
+  {ok, State, infinity}.
 
 
 %% @doc Responds synchronously to server calls.
 handle_call(close, _From, State) ->
-	{stop, normal, ok, State};
+  {stop, normal, ok, State};
 handle_call(file_size, _From, State) ->
-    Length = get_attribute(State, length),
-    {reply, {ok, Length}, State, State#state.timeout};
+  Length = get_attribute(State, length),
+  {reply, {ok, Length}, State, State#state.timeout};
 handle_call({get_attr, Attr}, _From, State) ->
-    FoundAttr = get_attribute(State, Attr),
-    {reply, {ok, FoundAttr}, State, State#state.timeout};
+  FoundAttr = get_attribute(State, Attr),
+  {reply, {ok, FoundAttr}, State, State#state.timeout};
 handle_call(md5, _From, State) ->
-    Md5 = get_attribute(State, md5),
-    {reply, {ok, Md5}, State, State#state.timeout};
+  Md5 = get_attribute(State, md5),
+  {reply, {ok, Md5}, State, State#state.timeout};
 handle_call({get_attr, Attr}, _From, State) ->
-    FoundAttr = get_attribute(State, Attr),
-    {reply, {ok, FoundAttr}, State, State#state.timeout};
+  FoundAttr = get_attribute(State, Attr),
+  {reply, {ok, FoundAttr}, State, State#state.timeout};
 handle_call(file_name, _From, State) ->
-    FileName = get_attribute(State, filename),
-    {reply, {ok, FileName}, State, State#state.timeout};
+  FileName = get_attribute(State, filename),
+  {reply, {ok, FileName}, State, State#state.timeout};
 handle_call(read_file, _From, State) ->
-	ChunkSize = get_attribute(State, chunkSize),
-	Length = get_attribute(State, length),
-	NumChunks = (Length + ChunkSize - 1) div ChunkSize, 
-	Reply = read(State, 0, 0, Length, NumChunks, <<>>),
-	{reply, {ok, Reply}, State, State#state.timeout};
+  ChunkSize = get_attribute(State, chunkSize),
+  Length = get_attribute(State, length),
+  NumChunks = (Length + ChunkSize - 1) div ChunkSize,
+  Reply = read(State, 0, 0, Length, NumChunks, <<>>),
+  {reply, {ok, Reply}, State, State#state.timeout};
 handle_call({pread, Offset, NumToRead}, _From, State) ->
-	ChunkSize = get_attribute(State, chunkSize),
-	Length = get_attribute(State, length),
-	case Offset >= Length of
-		false ->
-			NumChunks = (Length + ChunkSize - 1) div ChunkSize,
-			ChunkNum = Offset div ChunkSize,
-			ChunkOffset = Offset rem ChunkSize,
-			Reply = read(State, ChunkNum, ChunkOffset, NumToRead, NumChunks, <<>>),
-			{reply, {ok, Reply}, State, State#state.timeout};
-		true ->
-			{reply, eof, State, State#state.timeout}
-	end;
+  ChunkSize = get_attribute(State, chunkSize),
+  Length = get_attribute(State, length),
+  case Offset >= Length of
+    false ->
+      NumChunks = (Length + ChunkSize - 1) div ChunkSize,
+      ChunkNum = Offset div ChunkSize,
+      ChunkOffset = Offset rem ChunkSize,
+      Reply = read(State, ChunkNum, ChunkOffset, NumToRead, NumChunks, <<>>),
+      {reply, {ok, Reply}, State, State#state.timeout};
+    true ->
+      {reply, eof, State, State#state.timeout}
+  end;
 handle_call({set_timeout, Timeout}, _From, State) ->
-	{reply, ok, State#state{die_with_parent=false, timeout=Timeout}, Timeout}.
-			
+  {reply, ok, State#state{die_with_parent = false, timeout = Timeout}, Timeout}.
+
 
 %% @doc Responds to asynchronous server calls. This process doesn't expect any
 %%      asynchronous calls.
 handle_cast(_Msg, State) ->
-    {noreply, State, State#state.timeout}.
+  {noreply, State, State#state.timeout}.
 
 %% @doc Responds to out-of-band messages. The server ignores any such messages.
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, State) when Pid =:= State#state.parent_process andalso State#state.die_with_parent ->
-	{stop, normal, State};
+  {stop, normal, State};
 handle_info(timeout, State) ->
-	{stop, normal, State};
+  {stop, normal, State};
 handle_info(_Info, State) ->
-	{noreply, State, State#state.timeout}.
+  {noreply, State, State#state.timeout}.
 
 %% @doc Handles the shutdown of the server.
 terminate(_Reason, _State) ->
-    ok.
+  ok.
 
-%% @doc Responds to code changes. Any code changes are ignored (the server's state 
+%% @doc Responds to code changes. Any code changes are ignored (the server's state
 %%      is unchanged).
 code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+  {ok, State}.
 
 
 %% Internal functions
+get_attribute(State, K) when is_atom(K) -> get_attribute(State, atom_to_binary(K, utf8));
 get_attribute(State, Attribute) ->
-	Coll = list_to_atom(atom_to_list(State#state.bucket) ++ ".files"),
-	Parameters = State#state.connection_parameters,
-	WriteMode = Parameters#gridfs_connection.write_mode,
-	ReadMode = Parameters#gridfs_connection.read_mode,
-	Conn = Parameters#gridfs_connection.connection,
-	Database = Parameters#gridfs_connection.database,
-	{ok, {{Attribute, Value}}} = mongo:do(WriteMode, ReadMode, Conn, Database,
-										  fun() ->
-												  mongo:find_one(Coll, {'_id', State#state.id}, {'_id', 0, Attribute, 1})
-										  end),
-	Value.
+  Coll = <<(gridfs:coll(State#state.bucket))/binary, ".files">>,
+  Parameters = State#state.connection_parameters,
+  WriteMode = Parameters#gridfs_connection.write_mode,
+  ReadMode = Parameters#gridfs_connection.read_mode,
+  Conn = Parameters#gridfs_connection.connection,
+  Database = Parameters#gridfs_connection.database,
+  #{Attribute := Value} =
+    mc_worker_api:find_one(Conn, {Database, Coll}, {'_id', State#state.id}, #{
+      projector => #{<<"_id">> => 0, Attribute => 1}
+    }),
+  Value.
 
 read(_State, ChunkNum, _Offset, _NumToRead, NumberOfChunks, Result) when ChunkNum >= NumberOfChunks ->
-	Result;
+  Result;
 read(_State, _ChunkNum, _Offset, NumToRead, _NumberOfChunks, Result) when NumToRead =< 0 ->
-	Result;
+  Result;
 read(State, ChunkNum, Offset, NumToRead, NumberOfChunks, Result) ->
-	Coll = list_to_atom(atom_to_list(State#state.bucket) ++ ".chunks"),
-	Parameters = State#state.connection_parameters,
-	WriteMode = Parameters#gridfs_connection.write_mode,
-	ReadMode = Parameters#gridfs_connection.read_mode,
-	Conn = Parameters#gridfs_connection.connection,
-	Database = Parameters#gridfs_connection.database,
-	{ok, {{data,{bin, bin, BinData}}}} = mongo:do(WriteMode, ReadMode, Conn, Database,
-												  fun() ->
-														  mongo:find_one(Coll, {'files_id', State#state.id, n, ChunkNum}, {'_id', 0, data, 1})
-												  end),
-	if
-		Offset > 0 ->
-			ListData1 = binary_to_list(BinData),
-			{_, ListData2} = lists:split(Offset, ListData1),
-			BinData2 = list_to_binary(ListData2);
-		true ->
-			BinData2 = BinData
-	end,
-	if
-		size(BinData2) > NumToRead ->
-			ListData3 = binary_to_list(BinData2),
-			{ListData4, _} = lists:split(NumToRead, ListData3),
-			BinData3 = list_to_binary(ListData4),
-			<<Result/binary, BinData3/binary>>;
-		true ->
-			read(State, ChunkNum+1, 0, NumToRead-size(BinData2), NumberOfChunks, <<Result/binary, BinData2/binary>>)
-	end.
+  Coll = <<(gridfs:coll(State#state.bucket))/binary, ".chunks">>,
+  Parameters = State#state.connection_parameters,
+  WriteMode = Parameters#gridfs_connection.write_mode,
+  ReadMode = Parameters#gridfs_connection.read_mode,
+  Conn = Parameters#gridfs_connection.connection,
+  Database = Parameters#gridfs_connection.database,
+  #{<<"data">> := {bin, bin, BinData}} =
+      mc_worker_api:find_one(Conn, {Database, Coll}, {'files_id', State#state.id, n, ChunkNum}, #{projector => #{<<"_id">> => 0, <<"data">> => 1}}),
+  if
+    Offset > 0 ->
+      ListData1 = binary_to_list(BinData),
+      {_, ListData2} = lists:split(Offset, ListData1),
+      BinData2 = list_to_binary(ListData2);
+    true ->
+      BinData2 = BinData
+  end,
+  if
+    size(BinData2) > NumToRead ->
+      ListData3 = binary_to_list(BinData2),
+      {ListData4, _} = lists:split(NumToRead, ListData3),
+      BinData3 = list_to_binary(ListData4),
+      <<Result/binary, BinData3/binary>>;
+    true ->
+      read(State, ChunkNum + 1, 0, NumToRead - size(BinData2), NumberOfChunks, <<Result/binary, BinData2/binary>>)
+  end.

@@ -17,4 +17,5 @@
 %% Types
 -type(cursor() :: pid()).
 -type(file() :: pid()).
--type(bucket() :: atom()).
+-type(bucket() :: atom() | binary()).
+-type(database() :: atom() | binary()).

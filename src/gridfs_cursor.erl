@@ -13,7 +13,7 @@
 %%% @author CA Meijer
 %%% @copyright 2012 CA Meijer
 %%% @doc MongoDB GridFS Cursor API. This module provides functions for retrieving GridFS
-%%%      files from a cursor. 
+%%%      files from a cursor.
 %%% @end
 
 -module(gridfs_cursor).
@@ -32,11 +32,11 @@
 		 take/2]).
 
 %% gen_server callbacks
--export([init/1, 
-		 handle_call/3, 
-		 handle_cast/2, 
-		 handle_info/2, 
-		 terminate/2, 
+-export([init/1,
+		 handle_call/3,
+		 handle_cast/2,
+		 handle_info/2,
+		 terminate/2,
 		 code_change/3]).
 
 %% Records
@@ -50,8 +50,8 @@ close(Pid) ->
 
 %% @doc Creates a cursor using a specified connection to a database collection of files.
 -spec(new(#gridfs_connection{}, bucket(), mongo:cursor(), pid()) -> cursor()).
-new(ConnectionParameters, Bucket, MongoCursor, ParentProcess) ->
-	{ok, Cursor} = gen_server:start_link(?MODULE, [ConnectionParameters, Bucket, MongoCursor, ParentProcess], []),
+new(Conn, Bucket, MongoCursor, ParentProcess) ->
+	{ok, Cursor} = gen_server:start_link(?MODULE, [Conn, Bucket, MongoCursor, ParentProcess], []),
 	Cursor.
 
 %% @doc Returns the next GridFS file from a cursor or an empty tuple if there are no further
@@ -70,7 +70,7 @@ rest(Cursor) ->
 -spec(set_timeout(cursor(), integer()) -> ok).
 set_timeout(Cursor, Timeout) ->
 	gen_server:call(Cursor, {set_timeout, Timeout}, infinity).
-	
+
 %% @doc Retrieves GridFS files from a cursor up to the specified maximum number.
 -spec(take(integer(), cursor()) -> [file()]).
 take(Limit, Cursor) when Limit >= 0 ->
@@ -82,11 +82,11 @@ take(Limit, Cursor) when Limit >= 0 ->
 %% @doc Initializes the server with connection parameters, a bucket and a mongo cursor.
 init([ConnectionParameters, Bucket, MongoCursor, ParentProcess]) ->
 	monitor(process, ParentProcess),
-    {ok, 
-	 #state{connection_parameters=ConnectionParameters, 
-				bucket=Bucket, 
-				mongo_cursor=MongoCursor, 
-				parent_process=ParentProcess}, 
+    {ok,
+	 #state{connection_parameters=ConnectionParameters,
+				bucket=Bucket,
+				mongo_cursor=MongoCursor,
+				parent_process=ParentProcess},
 	 infinity}.
 
 %% @doc Responds to synchronous messages. Synchronous messages are sent to get the next file,
@@ -96,21 +96,23 @@ handle_call(close, _From, State) ->
 	{stop, normal, ok, State};
 handle_call(next, _From, State) ->
 	MongoCursor = State#state.mongo_cursor,
-	case mongo_cursor:next(MongoCursor) of
-		{} ->
+	case mc_cursor:next(MongoCursor) of
+		error ->
 			{stop, normal, {}, State};
-		{{'_id', Id}} ->
+		{#{<<"_id">> := Id}} ->
 			{reply, create_file(State, Id), State, State#state.timeout}
 	end;
 handle_call(rest, _From, State) ->
 	MongoCursor = State#state.mongo_cursor,
-	Ids = mongo_cursor:rest(MongoCursor),
-	Reply = [create_file(State, Id) || {'_id', Id} <- Ids],
+	Ids = mc_cursor:rest(MongoCursor),
+	Reply = [create_file(State, Id) || #{<<"_id">> := Id} <- Ids],
 	{stop, normal, Reply, State};
 handle_call({set_timeout, Timeout}, _From, State) ->
 	{reply, ok, State#state{die_with_parent=false, timeout=Timeout}, Timeout};
 handle_call({take, Limit}, _From, State) ->
-	Files = take(State, Limit, []),
+  MongoCursor = State#state.mongo_cursor,
+  Docs = mc_cursor:take(MongoCursor, Limit),
+	Files = [create_file(State, Id) || #{<<"_id">> := Id} <- Docs],
 	{stop, normal, Files, State}.
 
 %% @doc Responds asynchronously to messages. The module does not expect to receive asynchronous
@@ -147,17 +149,4 @@ create_file(State, Id) ->
 		false ->
 			gridfs_file:set_timeout(File, State#state.timeout),
 			File
-	end.
-
-% Reads files from a cursor up to a limit and returns them as a list.
-take(_State, 0, Files) ->
-	lists:reverse(Files);
-take(State, Limit, Files) ->
-	MongoCursor = State#state.mongo_cursor,
-	case mongo_cursor:next(MongoCursor) of
-		{} ->
-			lists:reverse(Files);
-		{{'_id', Id}} ->
-			File = create_file(State, Id),
-			take(State, Limit-1, [File|Files])
 	end.
