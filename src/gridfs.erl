@@ -138,9 +138,9 @@ insert(Conn, Db, Bucket, Bson, FileData) when is_binary(FileData) ->
   ChunksColl = <<(coll(Bucket))/binary, ".chunks">>,
   ObjectId = mongo_id_server:object_id(),
   insert(Conn, Db, ChunksColl, ObjectId, 0, FileData),
-  Md5 = list_to_binary(bin_to_hexstr(crypto:md5(FileData))),
+  Md5 = list_to_binary(bin_to_hexstr(erlang:md5(FileData))),
   ListBson = tuple_to_list(Bson),
-  ListFileAttr = ['_id', ObjectId, length, size(FileData), chunkSize, ?CHUNK_SIZE, uploadDate, now(), md5, Md5],
+  ListFileAttr = ['_id', ObjectId, length, size(FileData), chunkSize, ?CHUNK_SIZE, uploadDate, erlang:timestamp(), md5, Md5],
   UnifiedList = lists:append([ListFileAttr, ListBson]),
   Res = mc_worker_api:insert(Conn, {Db, FilesColl}, list_to_tuple(UnifiedList)),
 
@@ -149,12 +149,12 @@ insert(Conn, Db, Bucket, Bson, IoStream) ->
   FilesColl = <<(coll(Bucket))/binary, ".files">>,
   ChunksColl = <<(coll(Bucket))/binary, ".chunks">>,
   ObjectId = mongo_id_server:object_id(),
-  {Md5, FileSize} = copy(Conn, Db, ChunksColl, ObjectId, 0, IoStream, crypto:md5_init(), 0),
+  {Md5, FileSize} = copy(Conn, Db, ChunksColl, ObjectId, 0, IoStream, erlang:md5_init(), 0),
   Md5Str = list_to_binary(bin_to_hexstr(Md5)),
   file:close(IoStream),
   ListBson = tuple_to_list(Bson),
   ListFileAttr = ['_id', ObjectId, length, FileSize, chunkSize, ?CHUNK_SIZE,
-    uploadDate, now(), md5, Md5Str],
+    uploadDate, erlang:timestamp(), md5, Md5Str],
   UnifiedList = lists:append([ListFileAttr, ListBson]),
   mc_worker_api:insert(Conn, {Db, FilesColl}, list_to_tuple(UnifiedList)),
   {ok, ObjectId}.
@@ -173,10 +173,10 @@ insert(Conn, Db, Coll, ObjectId, N, Data) ->
 copy(Conn, Db, ChunksColl, ObjectId, N, IoStream, Md5Context, Size) ->
   case file:pread(IoStream, N * ?CHUNK_SIZE, ?CHUNK_SIZE) of
     eof ->
-      {crypto:md5_final(Md5Context), Size};
+      {erlang:md5_final(Md5Context), Size};
     {ok, Data} ->
       mc_worker_api:insert(Conn, {Db, ChunksColl}, {'files_id', ObjectId, data, {bin, bin, Data}, n, N}),
-      copy(Conn, Db, ChunksColl, ObjectId, N + 1, IoStream, crypto:md5_update(Md5Context, Data), Size + size(Data))
+      copy(Conn, Db, ChunksColl, ObjectId, N + 1, IoStream, erlang:md5_update(Md5Context, Data), Size + size(Data))
   end.
 
 coll(Bucket) when is_atom(Bucket) -> atom_to_binary(Bucket, utf8);
