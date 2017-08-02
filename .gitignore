@@ -3,3 +3,4 @@ ebin/
 .settings
 _build
 .DS_Store
+/.rebar3
