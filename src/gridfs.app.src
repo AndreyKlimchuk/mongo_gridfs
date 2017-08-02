@@ -5,5 +5,5 @@
               gridfs_cursor,
               gridfs_file]},
    {registered,[]},
-   {applications, [kernel, stdlib]},
+   {applications, [kernel, stdlib, mongodb]},
    {start_phases, []}]}.
